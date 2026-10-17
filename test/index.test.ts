@@ -152,7 +152,7 @@ describe("GET /badge", () => {
     expect(svg).toContain('role="img"');
     expect(svg).toContain('aria-label="Your IP: 203.0.113.7"');
     expect(svg).toContain(">203.0.113.7<");
-    expect(svg).toContain('fill="#ff2d55"');
+    expect(svg).toContain('fill="#e11d48"');
     expectCors(response);
   });
 });

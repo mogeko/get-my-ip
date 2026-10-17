@@ -55,7 +55,7 @@ export function toIpInfo(ip: string, cf: Partial<IncomingRequestCfProperties> | 
 }
 
 export function badgeSvg(ip: string): string {
-  return makeBadge({ label: "Your IP", message: ip, color: "#FF2D55" });
+  return makeBadge({ label: "Your IP", message: ip, color: "#E11D48" });
 }
 
 function baseHeaders(extra: Record<string, string> = {}): Headers {
