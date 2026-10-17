@@ -1,6 +1,6 @@
-import { SELF } from "cloudflare:test";
+import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import worker, { clientIp, toIpInfo } from "../src/index";
+import worker, { badgeSvg, clientIp, toIpInfo } from "../src/index";
 
 const clientIpHeader = { "CF-Connecting-IP": "203.0.113.7" };
 
@@ -104,7 +104,9 @@ describe("toIpInfo", () => {
 
 describe("GET /", () => {
   it("returns the client IP as plain text", async () => {
-    const response = await SELF.fetch("https://example.com/", { headers: clientIpHeader });
+    const response = await exports.default.fetch("https://example.com/", {
+      headers: clientIpHeader,
+    });
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/plain; charset=utf-8");
@@ -129,16 +131,53 @@ describe("GET /json", () => {
   });
 
   it("returns null metadata when cf is unavailable", async () => {
-    const response = await SELF.fetch("https://example.com/json", { headers: clientIpHeader });
+    const response = await exports.default.fetch("https://example.com/json", {
+      headers: clientIpHeader,
+    });
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(emptyIpInfo);
   });
 });
 
+describe("GET /badge", () => {
+  it("returns an SVG badge with the client IP", async () => {
+    const response = await exports.default.fetch("https://example.com/badge", {
+      headers: clientIpHeader,
+    });
+    const svg = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/svg+xml; charset=utf-8");
+    expect(svg).toContain('role="img"');
+    expect(svg).toContain('aria-label="Your IP: 203.0.113.7"');
+    expect(svg).toContain(">203.0.113.7<");
+    expect(svg).toContain('fill="#e11d48"');
+    expectCors(response);
+  });
+});
+
+describe("badgeSvg", () => {
+  it("escapes XML metacharacters", () => {
+    const svg = badgeSvg('1.2.3.4"><script>');
+
+    expect(svg).not.toContain("<script>");
+    expect(svg).toContain("&quot;&gt;&lt;script&gt;");
+  });
+
+  it("widens the badge for longer addresses", () => {
+    const short = Number(badgeSvg("::1").match(/width="(\d+)"/)?.[1]);
+    const long = Number(
+      badgeSvg("2001:0db8:85a3:0000:0000:8a2e:0370:7334").match(/width="(\d+)"/)?.[1],
+    );
+
+    expect(long).toBeGreaterThan(short);
+  });
+});
+
 describe("OPTIONS", () => {
   it("answers CORS preflight for /", async () => {
-    const response = await SELF.fetch("https://example.com/", { method: "OPTIONS" });
+    const response = await exports.default.fetch("https://example.com/", { method: "OPTIONS" });
 
     expect(response.status).toBe(204);
     expect(await response.text()).toBe("");
@@ -147,7 +186,7 @@ describe("OPTIONS", () => {
   });
 
   it("answers CORS preflight for /json", async () => {
-    const response = await SELF.fetch("https://example.com/json", { method: "OPTIONS" });
+    const response = await exports.default.fetch("https://example.com/json", { method: "OPTIONS" });
 
     expect(response.status).toBe(204);
     expectCors(response);
@@ -156,7 +195,15 @@ describe("OPTIONS", () => {
 
 describe("error responses", () => {
   it("returns 500 when the client IP cannot be determined", async () => {
-    const response = await SELF.fetch("https://example.com/");
+    const response = await exports.default.fetch("https://example.com/");
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe("Unable to determine client IP\n");
+    expectCors(response);
+  });
+
+  it("returns a text error when /badge cannot determine the client IP", async () => {
+    const response = await exports.default.fetch("https://example.com/badge");
 
     expect(response.status).toBe(500);
     expect(await response.text()).toBe("Unable to determine client IP\n");
@@ -164,7 +211,7 @@ describe("error responses", () => {
   });
 
   it("returns a JSON error when /json cannot determine the client IP", async () => {
-    const response = await SELF.fetch("https://example.com/json");
+    const response = await exports.default.fetch("https://example.com/json");
 
     expect(response.status).toBe(500);
     expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
@@ -173,7 +220,7 @@ describe("error responses", () => {
   });
 
   it("returns 404 for unknown paths", async () => {
-    const response = await SELF.fetch("https://example.com/unknown", {
+    const response = await exports.default.fetch("https://example.com/unknown", {
       headers: clientIpHeader,
     });
 
@@ -183,7 +230,7 @@ describe("error responses", () => {
   });
 
   it("returns 405 for non-GET methods", async () => {
-    const response = await SELF.fetch("https://example.com/", {
+    const response = await exports.default.fetch("https://example.com/", {
       method: "POST",
       headers: clientIpHeader,
     });
@@ -193,8 +240,20 @@ describe("error responses", () => {
     expectCors(response);
   });
 
+  it("returns 405 for non-GET methods on /badge", async () => {
+    const response = await exports.default.fetch("https://example.com/badge", {
+      method: "POST",
+      headers: clientIpHeader,
+    });
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(response.headers.get("allow")).toBe("GET, OPTIONS");
+    expectCors(response);
+  });
+
   it("returns a JSON error for non-GET methods on /json", async () => {
-    const response = await SELF.fetch("https://example.com/json", {
+    const response = await exports.default.fetch("https://example.com/json", {
       method: "POST",
       headers: clientIpHeader,
     });
