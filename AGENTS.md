@@ -2,7 +2,7 @@
 
 ## Repository state
 
-An API that returns the caller's public IP address (see [README.md](./README.md)). The Worker is scaffolded with a minimal test suite; there are no bindings, linter plugins beyond Biome's recommended preset, or CI workflows yet.
+An API that returns the caller's public IP address plus geographic/network metadata (see [README.md](./README.md)). The Worker is scaffolded with a test suite; there are no bindings, linter plugins beyond Biome's recommended preset, or CI workflows yet.
 
 Default branch is `master`; active development happens on `dev`.
 
@@ -17,13 +17,17 @@ Default branch is `master`; active development happens on `dev`.
 
 | Route | Response |
 |---|---|
-| `GET /` | `text/plain` with the IP plus trailing newline, `cache-control: no-store` |
-| `GET /json` | `{ "ip": "<addr>" }` |
-| any other path | `404` |
-| non-`GET` method | `405` with `allow: GET` |
-| missing `CF-Connecting-IP` | `500` with an explicit error message |
+| `GET /` | `text/plain` with the IP plus trailing newline |
+| `GET /json` | `application/json` with `ip`, geo fields (`country`, `region`, `regionCode`, `city`, `postalCode`, `timezone`, `continent`, `latitude`, `longitude`) and network fields (`asn`, `asOrganization`, `colo`) |
+| `OPTIONS` (any path) | `204` with CORS preflight headers |
+| any other path | `404` (plain text) |
+| method other than `GET`/`OPTIONS` | `405` with `allow: GET, OPTIONS` |
+| missing `CF-Connecting-IP` | `500` |
 
-The handler stays thin and delegates IP extraction to the exported `clientIp(request)` helper in `src/index.ts`.
+- `IpInfo` keys are always present; unresolvable metadata is `null`, so a missing `request.cf` never produces a 5xx.
+- All responses include `access-control-allow-origin: *`, `access-control-allow-methods: GET, OPTIONS`, `access-control-max-age: 86400`, and `cache-control: no-store` — including errors, otherwise browsers hide them.
+- Error bodies: `text/plain` on `/`, `application/json` (`{"error": "..."}`) on `/json`.
+- The handler stays thin and delegates to the exported pure helpers `clientIp(request)` and `toIpInfo(ip, cf)` in `src/index.ts`.
 
 ## Commands
 
@@ -36,11 +40,10 @@ The handler stays thin and delegates IP extraction to the exported `clientIp(req
 | Type check | `bun run typecheck` |
 | Run all tests | `bun run test` |
 | Watch tests | `bun run test:watch` |
-| Run one test file | `bunx vitest run test/index.spec.ts` |
-| Run one test by name | `bunx vitest run test/index.spec.ts -t "<test name>"` |
-| Format (write) | `bun run format` |
-| Check format + lint | `bun run check` |
-| Apply safe fixes | `bun run check:write` |
+| Run one test file | `bunx vitest run test/index.test.ts` |
+| Run one test by name | `bunx vitest run test/index.test.ts -t "<test name>"` |
+| Check format + lint | `bun run lint` |
+| Apply Biome fixes | `bun run fmt` |
 
 Run `bun run cf-typegen` after changing bindings in `wrangler.jsonc`. It regenerates `worker-configuration.d.ts` (including the global `Env` type), which is committed and excluded from Biome via `files.includes` — never edit it by hand.
 
@@ -51,11 +54,13 @@ The entire API depends on resolving the *real* caller IP, which has Workers-spec
 - `CF-Connecting-IP` is the injected header containing the client IP. For a zone proxied by Cloudflare, this is the value to return; `X-Forwarded-For` is a comma-separated chain and is client-controllable.
 - The "Remove visitor IP headers" Managed Transform can strip `CF-Connecting-IP`, so handle a missing header explicitly rather than returning an empty body.
 - In **same-zone Worker subrequests**, `CF-Connecting-IP` mirrors `x-real-ip`, which the calling Worker can alter. In **cross-zone** subrequests it is set to `2a06:98c0:3600::103`. Do not build trust assumptions on the header for subrequest-originated traffic.
-- `request.cf` (e.g. `request.cf.country`, `asn`) is populated by Cloudflare at the edge and is `undefined` in unit tests unless passed through Miniflare.
+- `request.cf` (e.g. `request.cf.country`, `asn`) is populated by Cloudflare at the edge; every field is optional, so treat absent or blank values as `null`. It is unavailable in the Dashboard/Playground and can be absent when calling `worker.fetch` directly in tests — inject it with `new Request(url, { cf: {...} })` and assert the resulting JSON.
+- Local `wrangler dev` does populate `request.cf` from your network, while `SELF.fetch` in Vitest typically does not; keep integration tests independent of real geo data.
 
 ## Conventions
 
-- Keep the request handler thin: derive the IP in the pure `clientIp(request)` helper so it can be unit-tested without an HTTP round-trip; test the HTTP behavior through `SELF.fetch`.
+- Keep the request handler thin: derive the IP in the pure `clientIp(request)` helper and metadata in `toIpInfo(ip, cf)`, so both are unit-testable without an HTTP round-trip; test routing and headers through `SELF.fetch`.
+- Build responses through the `textResponse`/`jsonResponse`/`baseHeaders` helpers so CORS and `cache-control` stay consistent on success and error paths. Never add `access-control-allow-credentials` — the data is public and read-only.
 - Local dev populates `CF-Connecting-IP` with `::1`; send the header explicitly with `curl -H 'CF-Connecting-IP: ...'` to exercise other values.
 - Pin `compatibility_date` in `wrangler.jsonc` to a fixed date and bump it deliberately — runtime APIs (and the types generated by `wrangler types`) follow it.
 - Local dev runs on `workerd` with `TZ=UTC` regardless of machine timezone. Node.js APIs require the `nodejs_compat` compatibility flag; prefer Web-standard APIs (`fetch`, `URL`, `Request`/`Response`) first.
