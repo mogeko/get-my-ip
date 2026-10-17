@@ -11,6 +11,7 @@ Default branch is `master`; active development happens on `dev`.
 - **Cloudflare Workers** (ES modules) configured in `wrangler.jsonc`; entry point `src/index.ts` with a default-exported `fetch` handler.
 - **Bun 1.4** as the local package manager and script runner (`bun install`, `bun run <script>`). `bun.lock` is committed. Vitest itself still executes on Node via its CLI shebang.
 - **Vitest 5** with `@cloudflare/vitest-plugin` (`cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })` in `vitest.config.mts`). Tests import `SELF`/`env` from `cloudflare:test`.
+- **badge-maker** (runtime dependency) renders the `/badge` SVG via `makeBadge({ label, message, color })`. Do not hand-roll SVG or width calculations.
 - **Biome 2.5** for formatting and linting. `formatter.useEditorconfig` is `true`, so indentation, line endings, and final-newline behavior come from `.editorconfig`, which sets per-format rules (4 spaces, LF; Biome-formatted TS/JSON has no final newline, while Markdown and generated files keep one). Keep those out of `biome.json`; only `lineWidth`, quote style, and semicolon style are configured there.
 
 ## API contract
@@ -19,6 +20,7 @@ Default branch is `master`; active development happens on `dev`.
 |---|---|
 | `GET /` | `text/plain` with the IP plus trailing newline |
 | `GET /json` | `application/json` with `ip`, geo fields (`country`, `region`, `regionCode`, `city`, `postalCode`, `timezone`, `continent`, `latitude`, `longitude`) and network fields (`asn`, `asOrganization`, `colo`) |
+| `GET /badge` | `image/svg+xml` shields-style badge showing the IP. Internal endpoint: intentionally **not** documented in README.md |
 | `OPTIONS` (any path) | `204` with CORS preflight headers |
 | any other path | `404` (plain text) |
 | method other than `GET`/`OPTIONS` | `405` with `allow: GET, OPTIONS` |
@@ -27,7 +29,8 @@ Default branch is `master`; active development happens on `dev`.
 - `IpInfo` keys are always present; unresolvable metadata is `null`, so a missing `request.cf` never produces a 5xx.
 - All responses include `access-control-allow-origin: *`, `access-control-allow-methods: GET, OPTIONS`, `access-control-max-age: 86400`, and `cache-control: no-store` — including errors, otherwise browsers hide them.
 - Error bodies: `text/plain` on `/`, `application/json` (`{"error": "..."}`) on `/json`.
-- The handler stays thin and delegates to the exported pure helpers `clientIp(request)` and `toIpInfo(ip, cf)` in `src/index.ts`.
+- The handler stays thin and delegates to the exported pure helpers `clientIp(request)`, `toIpInfo(ip, cf)`, and `badgeSvg(ip)` in `src/index.ts`.
+- `/badge` is internal-only in terms of documentation: publicly reachable, but do not add it to README.md. `badgeSvg` delegates to `badge-maker`, which handles XML escaping and width measurement; keep errors as `text/plain` on this path.
 
 ## Commands
 
