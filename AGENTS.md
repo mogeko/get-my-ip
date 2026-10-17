@@ -9,8 +9,8 @@ Default branch is `master`; active development happens on `dev`.
 ## Stack
 
 - **Cloudflare Workers** (ES modules) configured in `wrangler.jsonc`; entry point `src/index.ts` with a default-exported `fetch` handler.
-- **Bun 1.4** as the local package manager and script runner (`bun install`, `bun run <script>`). `bun.lock` is committed. Vitest itself still executes on Node via its CLI shebang.
-- **Vitest 5** with `@cloudflare/vitest-plugin` (`cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })` in `vitest.config.mts`). Integration tests call `exports.default.fetch()` from `cloudflare:workers`; the `SELF` and `env` exports of `cloudflare:test` are deprecated.
+- **Bun 1.4** is the package manager, script runner, and test runtime (`bun test`). `bun.lock` is committed.
+- **Bun test** (`bun:test`) runs the suite in the Bun runtime, not `workerd`. Tests call the exported handler directly through the `fetchWorker()` helper and attach `cf` with `Object.defineProperty`; `cloudflare:test` and the `exports` loopback binding are unavailable. Type checking is split: the root `tsconfig.json` sets `types: []` so `src/` only sees Workers types from `worker-configuration.d.ts`, while `test/tsconfig.json` opts into `@types/bun` (`types: ["bun"]`). `bun run typecheck` checks both projects.
 - **Biome 2.5** for formatting and linting. `formatter.useEditorconfig` is `true`, so indentation, line endings, and final-newline behavior come from `.editorconfig`, which sets per-format rules (4 spaces, LF; Biome-formatted TS/JSON has no final newline, while Markdown and generated files keep one). Keep those out of `biome.json`; only `lineWidth`, quote style, and semicolon style are configured there.
 
 ## API contract
@@ -41,8 +41,8 @@ Default branch is `master`; active development happens on `dev`.
 | Type check | `bun run typecheck` |
 | Run all tests | `bun run test` |
 | Watch tests | `bun run test:watch` |
-| Run one test file | `bunx vitest run test/index.test.ts` |
-| Run one test by name | `bunx vitest run test/index.test.ts -t "<test name>"` |
+| Run one test file | `bun test test/index.test.ts` |
+| Run one test by name | `bun test test/index.test.ts -t "<test name>"` |
 | Check format + lint | `bun run lint` |
 | Apply Biome fixes | `bun run fmt` |
 
@@ -55,15 +55,17 @@ The entire API depends on resolving the *real* caller IP, which has Workers-spec
 - `CF-Connecting-IP` is the injected header containing the client IP. For a zone proxied by Cloudflare, this is the value to return; `X-Forwarded-For` is a comma-separated chain and is client-controllable.
 - The "Remove visitor IP headers" Managed Transform can strip `CF-Connecting-IP`, so handle a missing header explicitly rather than returning an empty body.
 - In **same-zone Worker subrequests**, `CF-Connecting-IP` mirrors `x-real-ip`, which the calling Worker can alter. In **cross-zone** subrequests it is set to `2a06:98c0:3600::103`. Do not build trust assumptions on the header for subrequest-originated traffic.
-- `request.cf` (e.g. `request.cf.country`, `asn`) is populated by Cloudflare at the edge; every field is optional, so treat absent or blank values as `null`. It is unavailable in the Dashboard/Playground and can be absent when calling `worker.fetch` directly in tests — inject it with `new Request(url, { cf: {...} })` and assert the resulting JSON.
-- Local `wrangler dev` does populate `request.cf` from your network, while the Vitest loopback binding typically does not; keep integration tests independent of real geo data.
+- `request.cf` (e.g. `request.cf.country`, `asn`) is populated by Cloudflare at the edge; every field is optional, so treat absent or blank values as `null`. It is unavailable in the Dashboard/Playground and can be absent when calling `worker.fetch` directly in tests — inject it with `Object.defineProperty(request, "cf", { value })` (Bun ignores the `cf` field of `RequestInit`) and assert the resulting JSON.
+- Local `wrangler dev` does populate `request.cf` from your network, while Bun test never populates it; keep integration tests independent of real geo data.
 
 ## Conventions
 
-- Keep the request handler thin: derive the IP in the pure `clientIp(request)` helper and metadata in `toIpInfo(ip, cf)`, so both are unit-testable without an HTTP round-trip; test routing and headers through `exports.default.fetch()`.
+- Keep the request handler thin: derive the IP in the pure `clientIp(request)` helper and metadata in `toIpInfo(ip, cf)`, so both are unit-testable without an HTTP round-trip; test routing and headers through the `fetchWorker()` helper in `test/index.test.ts`.
 - Build responses through the `textResponse`/`jsonResponse`/`baseHeaders` helpers so CORS and `cache-control` stay consistent on success and error paths. Never add `access-control-allow-credentials` — the data is public and read-only.
 - Local dev populates `CF-Connecting-IP` with `::1`; send the header explicitly with `curl -H 'CF-Connecting-IP: ...'` to exercise other values.
 - Pin `compatibility_date` in `wrangler.jsonc` to a fixed date and bump it deliberately — runtime APIs (and the types generated by `wrangler types`) follow it.
+- Tests execute in Bun rather than `workerd`, so Workers-specific runtime behavior and bindings are not covered; `bun test` does not typecheck, so always run `bun run typecheck`.
+- Never add `types: ["bun"]` (or Bun/Node APIs) to the root tsconfig or `src/`: production code runs on Workers. Bun-only types belong in `test/tsconfig.json`.
 - Local dev runs on `workerd` with `TZ=UTC` regardless of machine timezone. Node.js APIs require the `nodejs_compat` compatibility flag; prefer Web-standard APIs (`fetch`, `URL`, `Request`/`Response`) first.
 - `wrangler dev` exposes a Local Explorer API on the printed dev-server URL for inspecting bindings, storage, and request traces under `/cdn-cgi/local/explorer/api/...`.
 - MCP servers for current Cloudflare docs are declared in `.mcp.json` at the repository root.

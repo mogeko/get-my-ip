@@ -61,7 +61,7 @@ Requires [Bun](https://bun.sh/) 1.4+.
 ```bash
 bun install
 bun run dev        # http://localhost:8787
-bun run test       # Vitest with workerd
+bun run test       # bun:test
 bun run typecheck
 bun run lint       # Biome format + lint
 bun run fmt        # Apply Biome fixes
