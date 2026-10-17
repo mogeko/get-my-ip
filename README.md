@@ -1,5 +1,8 @@
 # get-my-ip
 
+[![Test](https://github.com/mogeko/get-my-ip/actions/workflows/test.yml/badge.svg)](https://github.com/mogeko/get-my-ip/actions/workflows/test.yml)
+[![GitHub License](https://img.shields.io/github/license/mogeko/get-my-ip)](./LICENSE)
+
 An API to get your public IP address, deployed on Cloudflare Workers.
 
 ## Endpoints
@@ -7,14 +10,14 @@ An API to get your public IP address, deployed on Cloudflare Workers.
 `GET /` returns the IP as plain text:
 
 ```bash
-curl https://<your-worker-domain>/
+curl https://get-my-ip.mogeko.me/
 # 203.0.113.7
 ```
 
 `GET /json` returns the IP plus geographic and network metadata from `request.cf`:
 
 ```bash
-curl https://<your-worker-domain>/json
+curl https://get-my-ip.mogeko.me/json
 ```
 
 ```json
@@ -69,14 +72,6 @@ Local requests get `CF-Connecting-IP: ::1` from the runtime; override it to test
 ```bash
 curl -H 'CF-Connecting-IP: 198.51.100.9' http://localhost:8787/
 ```
-
-## Deploy
-
-```bash
-bun run deploy
-```
-
-Run `bun run cf-typegen` after changing bindings in `wrangler.jsonc`.
 
 ## License
 
