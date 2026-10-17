@@ -39,6 +39,7 @@ Default branch is `master`; active development happens on `dev`.
 | Install dependencies | `bun install` |
 | Local dev server (http://localhost:8787) | `bun run dev` |
 | Deploy | `bun run deploy` |
+| Create a Preview deployment (open beta) | `bunx wrangler preview` — requires the `previews` block in `wrangler.jsonc` |
 | Regenerate binding/runtime types | `bun run cf-typegen` |
 | Type check | `bun run typecheck` |
 | Run all tests | `bun run test` |
