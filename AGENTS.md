@@ -2,35 +2,47 @@
 
 ## Repository state
 
-An API that returns the caller's public IP address (see [README.md](./README.md)). The repository is currently a skeleton: only `README.md`, `LICENSE` (MIT), and the standard Node `.gitignore` are tracked. There is **no** `package.json`, Worker source, `wrangler.jsonc`, tests, linter, or CI yet. Do not assume files exist — check before referencing them, and do not invent script names.
+An API that returns the caller's public IP address (see [README.md](./README.md)). The Worker is scaffolded with a minimal test suite; there are no bindings, linter plugins beyond Biome's recommended preset, or CI workflows yet.
 
 Default branch is `master`; active development happens on `dev`.
 
-## Intended stack
+## Stack
 
-Cloudflare Workers, ES modules format, configured via `wrangler.jsonc` with the entry point at `src/index.ts` and a default-exported `fetch` handler. `package.json` scripts follow the Wrangler convention (`dev`: `wrangler dev`, `deploy`: `wrangler deploy`).
+- **Cloudflare Workers** (ES modules) configured in `wrangler.jsonc`; entry point `src/index.ts` with a default-exported `fetch` handler.
+- **Bun 1.4** as the local package manager and script runner (`bun install`, `bun run <script>`). `bun.lock` is committed. Vitest itself still executes on Node via its CLI shebang.
+- **Vitest 5** with `@cloudflare/vitest-plugin` (`cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })` in `vitest.config.mts`). Tests import `SELF`/`env` from `cloudflare:test`.
+- **Biome 2.5** for formatting and linting. `formatter.useEditorconfig` is `true`, so indentation, line endings, and final-newline behavior come from `.editorconfig`, which sets per-format rules (4 spaces, LF; Biome-formatted TS/JSON has no final newline, while Markdown and generated files keep one). Keep those out of `biome.json`; only `lineWidth`, quote style, and semicolon style are configured there.
 
-Scaffolding a Worker project (only if the project needs to be created from scratch):
+## API contract
 
-```bash
-bunx create cloudflare@latest -- <name>   # choose "Worker only" template
-```
+| Route | Response |
+|---|---|
+| `GET /` | `text/plain` with the IP plus trailing newline, `cache-control: no-store` |
+| `GET /json` | `{ "ip": "<addr>" }` |
+| any other path | `404` |
+| non-`GET` method | `405` with `allow: GET` |
+| missing `CF-Connecting-IP` | `500` with an explicit error message |
+
+The handler stays thin and delegates IP extraction to the exported `clientIp(request)` helper in `src/index.ts`.
 
 ## Commands
 
-These are the commands this project uses once the Worker is scaffolded; none exist in `package.json` yet.
-
 | Purpose | Command |
 |---|---|
-| Local dev server (http://localhost:8787) | `bunx wrangler dev` |
-| Deploy | `bunx wrangler deploy` |
-| Regenerate binding/runtime types | `bunx wrangler types` |
-| Type check | `bunx tsc --noEmit` |
-| Run all tests | `bunx vitest run` |
-| Run one test file | `bunx vitest run test/<file>.test.ts` |
-| Run one test by name | `bunx vitest run test/<file>.test.ts -t "<test name>"` |
+| Install dependencies | `bun install` |
+| Local dev server (http://localhost:8787) | `bun run dev` |
+| Deploy | `bun run deploy` |
+| Regenerate binding/runtime types | `bun run cf-typegen` |
+| Type check | `bun run typecheck` |
+| Run all tests | `bun run test` |
+| Watch tests | `bun run test:watch` |
+| Run one test file | `bunx vitest run test/index.spec.ts` |
+| Run one test by name | `bunx vitest run test/index.spec.ts -t "<test name>"` |
+| Format (write) | `bun run format` |
+| Check format + lint | `bun run check` |
+| Apply safe fixes | `bun run check:write` |
 
-Run `bunx wrangler types` after changing bindings in `wrangler.jsonc`; it regenerates `worker-configuration.d.ts` (including the `Env` type). Workers tests use `@cloudflare/vitest-plugin` with `cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })` in `vitest.config.ts` (requires Vitest 4.1+). Import `env`/`SELF` from `cloudflare:test` inside tests.
+Run `bun run cf-typegen` after changing bindings in `wrangler.jsonc`. It regenerates `worker-configuration.d.ts` (including the global `Env` type), which is committed and excluded from Biome via `files.includes` — never edit it by hand.
 
 ## Domain knowledge: client IP in Workers
 
@@ -43,7 +55,8 @@ The entire API depends on resolving the *real* caller IP, which has Workers-spec
 
 ## Conventions
 
-- Keep the request handler thin: derive the IP in a pure helper that accepts a `Request`, so it can be unit-tested without an HTTP round-trip.
+- Keep the request handler thin: derive the IP in the pure `clientIp(request)` helper so it can be unit-tested without an HTTP round-trip; test the HTTP behavior through `SELF.fetch`.
+- Local dev populates `CF-Connecting-IP` with `::1`; send the header explicitly with `curl -H 'CF-Connecting-IP: ...'` to exercise other values.
 - Pin `compatibility_date` in `wrangler.jsonc` to a fixed date and bump it deliberately — runtime APIs (and the types generated by `wrangler types`) follow it.
 - Local dev runs on `workerd` with `TZ=UTC` regardless of machine timezone. Node.js APIs require the `nodejs_compat` compatibility flag; prefer Web-standard APIs (`fetch`, `URL`, `Request`/`Response`) first.
 - `wrangler dev` exposes a Local Explorer API on the printed dev-server URL for inspecting bindings, storage, and request traces under `/cdn-cgi/local/explorer/api/...`.
