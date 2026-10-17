@@ -3,6 +3,8 @@
   "name": "get-my-ip",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-17",
+  "workers_dev": true,
+  "preview_urls": false,
   "observability": {
     "enabled": true
   },
