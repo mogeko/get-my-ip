@@ -1,0 +1,39 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = false
+insert_final_newline = false
+
+# TypeScript sources, tests and config: src/, test/, vitest.config.mts.
+# Biome reads this file (formatter.useEditorconfig) and writes no final newline.
+[*.{js,mjs,cjs,ts,mts,cts}]
+quote_type = double
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+
+# JSON and JSONC manifests/config: package.json, tsconfig.json, biome.json,
+# wrangler.jsonc, .mcp.json.
+[*.{json,jsonc}]
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+
+# Markdown docs: README.md, AGENTS.md. Keep the generated-by-editor final newline
+# and preserve intentional trailing spaces (hard line breaks).
+[*.md]
+trim_trailing_whitespace = false
+insert_final_newline = true
+
+# Generated files: `worker-configuration.d.ts` (wrangler types) mixes tabs and
+# spaces, `bun.lock` is 2-space formatted. Leave their indentation untouched.
+[{worker-configuration.d.ts,bun.lock}]
+indent_style = unset
+insert_final_newline = true

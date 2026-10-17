@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "get-my-ip",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-17",
+  "observability": {
+    "enabled": true
+  }
+}
