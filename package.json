@@ -14,9 +14,6 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "dependencies": {
-    "badge-maker": "^6.0.0"
-  },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
     "@cloudflare/vitest-plugin": "^1.4.4",

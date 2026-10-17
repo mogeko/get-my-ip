@@ -1,5 +1,3 @@
-import { makeBadge } from "badge-maker";
-
 export interface IpInfo {
   ip: string;
   country: string | null;
@@ -54,10 +52,6 @@ export function toIpInfo(ip: string, cf: Partial<IncomingRequestCfProperties> | 
   };
 }
 
-export function badgeSvg(ip: string): string {
-  return makeBadge({ label: "Your IP", message: ip, color: "#E11D48" });
-}
-
 function baseHeaders(extra: Record<string, string> = {}): Headers {
   return new Headers({ ...corsHeaders, "cache-control": "no-store", ...extra });
 }
@@ -79,15 +73,10 @@ function jsonResponse(body: unknown, status = 200, extra: Record<string, string>
   });
 }
 
-function badgeResponse(ip: string): Response {
-  return new Response(badgeSvg(ip), { headers: headers("image/svg+xml; charset=utf-8") });
-}
-
 export default {
   fetch(request: IncomingRequest): Response {
     const { pathname } = new URL(request.url);
     const isJson = pathname === "/json";
-    const isBadge = pathname === "/badge";
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: baseHeaders() });
@@ -99,7 +88,7 @@ export default {
         : textResponse("Method Not Allowed\n", 405, { allow: "GET, OPTIONS" });
     }
 
-    if (pathname !== "/" && !isJson && !isBadge) {
+    if (pathname !== "/" && !isJson) {
       return textResponse("Not Found\n", 404);
     }
 
@@ -111,7 +100,6 @@ export default {
     }
 
     if (isJson) return jsonResponse(toIpInfo(ip, request.cf));
-    if (isBadge) return badgeResponse(ip);
     return textResponse(`${ip}\n`);
   },
 } satisfies ExportedHandler<Env>;

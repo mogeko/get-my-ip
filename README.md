@@ -2,7 +2,6 @@
 
 [![Test](https://github.com/mogeko/get-my-ip/actions/workflows/test.yml/badge.svg)](https://github.com/mogeko/get-my-ip/actions/workflows/test.yml)
 [![GitHub License](https://img.shields.io/github/license/mogeko/get-my-ip)](./LICENSE)
-[![Your-IP](https://get-my-ip.mogeko.me/badge)](https://get-my-ip.mogeko.me/)
 
 An API to get your public IP address, deployed on Cloudflare Workers.
 
