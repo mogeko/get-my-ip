@@ -1,8 +1,19 @@
-import { exports } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import worker, { clientIp, toIpInfo } from "../src/index";
 
+type IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
+
 const clientIpHeader = { "CF-Connecting-IP": "203.0.113.7" };
+
+async function fetchWorker(
+  url: string,
+  init?: RequestInit,
+  cf?: Partial<IncomingRequestCfProperties>,
+): Promise<Response> {
+  const request = new Request(url, init);
+  if (cf) Object.defineProperty(request, "cf", { value: cf });
+  return worker.fetch(request as unknown as IncomingRequest);
+}
 
 const fullCf: Partial<IncomingRequestCfProperties> = {
   asn: 395747,
@@ -104,7 +115,7 @@ describe("toIpInfo", () => {
 
 describe("GET /", () => {
   it("returns the client IP as plain text", async () => {
-    const response = await exports.default.fetch("https://example.com/", {
+    const response = await fetchWorker("https://example.com/", {
       headers: clientIpHeader,
     });
 
@@ -117,12 +128,11 @@ describe("GET /", () => {
 
 describe("GET /json", () => {
   it("returns the client IP and metadata as JSON", async () => {
-    const request = new Request("https://example.com/json", {
-      headers: clientIpHeader,
-      cf: fullCf,
-    }) as Request<unknown, IncomingRequestCfProperties>;
-
-    const response = worker.fetch(request);
+    const response = await fetchWorker(
+      "https://example.com/json",
+      { headers: clientIpHeader },
+      fullCf,
+    );
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
@@ -131,7 +141,7 @@ describe("GET /json", () => {
   });
 
   it("returns null metadata when cf is unavailable", async () => {
-    const response = await exports.default.fetch("https://example.com/json", {
+    const response = await fetchWorker("https://example.com/json", {
       headers: clientIpHeader,
     });
 
@@ -142,7 +152,7 @@ describe("GET /json", () => {
 
 describe("OPTIONS", () => {
   it("answers CORS preflight for /", async () => {
-    const response = await exports.default.fetch("https://example.com/", { method: "OPTIONS" });
+    const response = await fetchWorker("https://example.com/", { method: "OPTIONS" });
 
     expect(response.status).toBe(204);
     expect(await response.text()).toBe("");
@@ -151,7 +161,7 @@ describe("OPTIONS", () => {
   });
 
   it("answers CORS preflight for /json", async () => {
-    const response = await exports.default.fetch("https://example.com/json", { method: "OPTIONS" });
+    const response = await fetchWorker("https://example.com/json", { method: "OPTIONS" });
 
     expect(response.status).toBe(204);
     expectCors(response);
@@ -160,7 +170,7 @@ describe("OPTIONS", () => {
 
 describe("error responses", () => {
   it("returns 500 when the client IP cannot be determined", async () => {
-    const response = await exports.default.fetch("https://example.com/");
+    const response = await fetchWorker("https://example.com/");
 
     expect(response.status).toBe(500);
     expect(await response.text()).toBe("Unable to determine client IP\n");
@@ -168,7 +178,7 @@ describe("error responses", () => {
   });
 
   it("returns a JSON error when /json cannot determine the client IP", async () => {
-    const response = await exports.default.fetch("https://example.com/json");
+    const response = await fetchWorker("https://example.com/json");
 
     expect(response.status).toBe(500);
     expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
@@ -177,7 +187,7 @@ describe("error responses", () => {
   });
 
   it("returns 404 for unknown paths", async () => {
-    const response = await exports.default.fetch("https://example.com/unknown", {
+    const response = await fetchWorker("https://example.com/unknown", {
       headers: clientIpHeader,
     });
 
@@ -187,7 +197,7 @@ describe("error responses", () => {
   });
 
   it("returns 405 for non-GET methods", async () => {
-    const response = await exports.default.fetch("https://example.com/", {
+    const response = await fetchWorker("https://example.com/", {
       method: "POST",
       headers: clientIpHeader,
     });
@@ -198,7 +208,7 @@ describe("error responses", () => {
   });
 
   it("returns a JSON error for non-GET methods on /json", async () => {
-    const response = await exports.default.fetch("https://example.com/json", {
+    const response = await fetchWorker("https://example.com/json", {
       method: "POST",
       headers: clientIpHeader,
     });
