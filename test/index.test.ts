@@ -1,4 +1,4 @@
-import { SELF } from "cloudflare:test";
+import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import worker, { badgeSvg, clientIp, toIpInfo } from "../src/index";
 
@@ -104,7 +104,9 @@ describe("toIpInfo", () => {
 
 describe("GET /", () => {
   it("returns the client IP as plain text", async () => {
-    const response = await SELF.fetch("https://example.com/", { headers: clientIpHeader });
+    const response = await exports.default.fetch("https://example.com/", {
+      headers: clientIpHeader,
+    });
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/plain; charset=utf-8");
@@ -129,7 +131,9 @@ describe("GET /json", () => {
   });
 
   it("returns null metadata when cf is unavailable", async () => {
-    const response = await SELF.fetch("https://example.com/json", { headers: clientIpHeader });
+    const response = await exports.default.fetch("https://example.com/json", {
+      headers: clientIpHeader,
+    });
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(emptyIpInfo);
@@ -138,7 +142,9 @@ describe("GET /json", () => {
 
 describe("GET /badge", () => {
   it("returns an SVG badge with the client IP", async () => {
-    const response = await SELF.fetch("https://example.com/badge", { headers: clientIpHeader });
+    const response = await exports.default.fetch("https://example.com/badge", {
+      headers: clientIpHeader,
+    });
     const svg = await response.text();
 
     expect(response.status).toBe(200);
@@ -170,7 +176,7 @@ describe("badgeSvg", () => {
 
 describe("OPTIONS", () => {
   it("answers CORS preflight for /", async () => {
-    const response = await SELF.fetch("https://example.com/", { method: "OPTIONS" });
+    const response = await exports.default.fetch("https://example.com/", { method: "OPTIONS" });
 
     expect(response.status).toBe(204);
     expect(await response.text()).toBe("");
@@ -179,7 +185,7 @@ describe("OPTIONS", () => {
   });
 
   it("answers CORS preflight for /json", async () => {
-    const response = await SELF.fetch("https://example.com/json", { method: "OPTIONS" });
+    const response = await exports.default.fetch("https://example.com/json", { method: "OPTIONS" });
 
     expect(response.status).toBe(204);
     expectCors(response);
@@ -188,7 +194,7 @@ describe("OPTIONS", () => {
 
 describe("error responses", () => {
   it("returns 500 when the client IP cannot be determined", async () => {
-    const response = await SELF.fetch("https://example.com/");
+    const response = await exports.default.fetch("https://example.com/");
 
     expect(response.status).toBe(500);
     expect(await response.text()).toBe("Unable to determine client IP\n");
@@ -196,7 +202,7 @@ describe("error responses", () => {
   });
 
   it("returns a text error when /badge cannot determine the client IP", async () => {
-    const response = await SELF.fetch("https://example.com/badge");
+    const response = await exports.default.fetch("https://example.com/badge");
 
     expect(response.status).toBe(500);
     expect(await response.text()).toBe("Unable to determine client IP\n");
@@ -204,7 +210,7 @@ describe("error responses", () => {
   });
 
   it("returns a JSON error when /json cannot determine the client IP", async () => {
-    const response = await SELF.fetch("https://example.com/json");
+    const response = await exports.default.fetch("https://example.com/json");
 
     expect(response.status).toBe(500);
     expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
@@ -213,7 +219,7 @@ describe("error responses", () => {
   });
 
   it("returns 404 for unknown paths", async () => {
-    const response = await SELF.fetch("https://example.com/unknown", {
+    const response = await exports.default.fetch("https://example.com/unknown", {
       headers: clientIpHeader,
     });
 
@@ -223,7 +229,7 @@ describe("error responses", () => {
   });
 
   it("returns 405 for non-GET methods", async () => {
-    const response = await SELF.fetch("https://example.com/", {
+    const response = await exports.default.fetch("https://example.com/", {
       method: "POST",
       headers: clientIpHeader,
     });
@@ -234,7 +240,7 @@ describe("error responses", () => {
   });
 
   it("returns 405 for non-GET methods on /badge", async () => {
-    const response = await SELF.fetch("https://example.com/badge", {
+    const response = await exports.default.fetch("https://example.com/badge", {
       method: "POST",
       headers: clientIpHeader,
     });
@@ -246,7 +252,7 @@ describe("error responses", () => {
   });
 
   it("returns a JSON error for non-GET methods on /json", async () => {
-    const response = await SELF.fetch("https://example.com/json", {
+    const response = await exports.default.fetch("https://example.com/json", {
       method: "POST",
       headers: clientIpHeader,
     });
